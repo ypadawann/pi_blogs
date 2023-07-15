@@ -16,6 +16,21 @@ def output_log(log)
   end
 end
 
+def escape_windows_filename(filename)
+  filename = filename.strip
+  filename = filename.gsub(/\\/, "￥")
+  filename = filename.gsub(/:/, "：")
+  filename = filename.gsub(/\*/, "＊")
+  filename = filename.gsub(/\?/, "？")
+  filename = filename.gsub(/"/, "”")
+  filename = filename.gsub(/</, "＜")
+  filename = filename.gsub(/>/, "＞")
+  filename = filename.gsub(/\|/, "｜")
+  filename = filename.gsub(/\//, "／")
+  filename += '_' if filename.end_with?('.')
+  return filename
+end
+
 def get_doc(url)
   charset = nil
   html = URI.open(url) do |f|
@@ -31,11 +46,34 @@ def get_article(url)
   return doc.xpath('//div[@class="blog_detail__main"]').text
 end
 
-def save(dirpath, url)
+def save(url)
   doc = get_doc(url)
+
+  header = doc.xpath('//div[@class="blog_detail__head"]')
+  date = header.xpath('./div[@class="blog_detail__date"]/p[@class="date"]').text
+  output_log "date: #{date}"
+  auther = header.xpath('./div[@class="blog_detail__date"]/p[@class="name"]/a').text
+  output_log "auther: #{auther}"
+  title = header.xpath('./div[@class="blog_detail__title"]').text
+  output_log "title: " + title
+
+  title = escape_windows_filename(title)
+  dirpath = BLOGS_DIR + "/" + auther + "/" + date + "_" + title
+  dirpath = dirpath.slice(0..200)
+  output_log "dirpath: " + dirpath
+  if Dir.exist?(dirpath)
+    return {
+      result: false,
+      is_exist: true
+    }
+  end
+  FileUtils.mkdir_p(dirpath)
 
   main_node = doc.xpath('//div[@class="blog_detail__main"]')
 
+  File.open(dirpath + "/title.txt", "w") do |f|
+    f.puts(title)
+  end
   File.open(dirpath + "/text.txt", "w") do |f|
     f.puts(main_node.text)
   end
@@ -45,18 +83,26 @@ def save(dirpath, url)
 
   main_node.xpath(".//img[@src]").each do |node|
     image_src = node.attr("src")
-    output_log(image_src)
-    next if !image_src.start_with?("/images")
-    image_url = BLOG_ROOT_URL + image_src
-    image_name = File.basename(image_url)
-    output_log(image_url)
-    URI.open(image_url) do |image|
-      File.open(dirpath+"/"+image_name, "w") do |f|
-        f.write(image.read)
-      end
+    output_log "image_src: " + image_src
+    #next if !image_src.start_with?("/images")
+    if image_src.start_with?("http")
+        image_url = image_src
+    else
+        image_url = BLOG_ROOT_URL + image_src
     end
-
+    image_name = File.basename(image_url)
+    output_log "image_url: " + image_url
+    begin
+        URI.open(image_url) do |image|
+          File.open(dirpath+"/"+image_name, "wb") do |f|
+            f.write(image.read)
+          end
+        end
+    rescue => e
+        output_log "Failed to get image. " + e.message
+    end
   end
+  return {result: true}
 end
 
 def get_blog_dirpath(auther, date, title)
@@ -79,20 +125,13 @@ def get_articles(url_path)
     date = title_node.xpath('.//*[@class="date"]').text
     article_url = node.xpath(".//a[@href]").attr("href").value
 
-      output_log(auther)
-      output_log date + " " + title
-      output_log article_url
-
-    dirpath = BLOGS_DIR + "/" + auther + "/" + date + "_" + title
-    if Dir.exist?(dirpath)
+    output_log "article_url: #{article_url}"
+    ret = save(article_url)
+    next if ret[:result] == true
+    if ret[:is_exist] == true
       output_log "this article is exist"
-      #exist_flag = true
-      #break
+      exist_flag = true
     end
-
-    FileUtils.mkdir_p(dirpath)
-    text = ""
-    save(dirpath, article_url)
   end
 
   if exist_flag
