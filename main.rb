@@ -1,8 +1,8 @@
-require 'open-uri'
+﻿require 'open-uri'
 require 'nokogiri'
 require 'fileutils'
 
-BLOG_ROOT_URL = ""
+BLOG_ROOT_URL = "https://nanabunnonijyuuni-mobile.com"
 BLOGS_DIR = File.expand_path("./blogs")
 LOG_FILE = File.expand_path("./log.log")
 
@@ -54,7 +54,7 @@ def save(url)
   output_log "date: #{date}"
   auther = header.xpath('./div[@class="blog_detail__date"]/p[@class="name"]/a').text
   output_log "auther: #{auther}"
-  title = header.xpath('./div[@class="blog_detail__title"]').text
+  title = header.xpath('./h3[@class="blog_detail__title"]').text
   output_log "title: " + title
 
   title = escape_windows_filename(title)
@@ -123,7 +123,7 @@ def get_articles(url_path)
     title = title_node.xpath('.//*[@class="title"]').text
     auther = title_node.xpath('.//*[@class="name"]').text
     date = title_node.xpath('.//*[@class="date"]').text
-    article_url = node.xpath(".//a[@href]").attr("href").value
+    article_url = BLOG_ROOT_URL + node.xpath(".//a[@href]").attr("href").value
 
     output_log "article_url: #{article_url}"
     ret = save(article_url)
@@ -158,7 +158,7 @@ def test_save
 end
 
 begin
-  top_url = ''
+  top_url = '/s/n110/diary/official_blog/list'
   get_articles(top_url)
   output_log "complete"
 rescue=> e
